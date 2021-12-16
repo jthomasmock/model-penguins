@@ -44,6 +44,13 @@ class: title-slide, left, top
 
 ### `r Sys.Date()`
 
+<span style='color:white; font-size:110%;'>Slides: [jthomasmock.github.io/model-penguins/](https://jthomasmock.github.io/model-penguins/#1)</span>  
+
+<span style='color:white; font-size:110%;'>Content: [github.com/jthomasmock/model-penguins](https://github.com/jthomasmock/model-penguins)</span>  
+
+<span style='color:white;'>Slides released under</span> [CC-BY 2.0](https://creativecommons.org/licenses/by/2.0/)&nbsp;&nbsp;`r fontawesome::fa("creative-commons", "white")``r fontawesome::fa("creative-commons-by", "white")` ]   
+
+
 <div style = "position: absolute;top: 100px;right: 50px;"><img src="https://raw.githubusercontent.com/rstudio/hex-stickers/master/SVG/tidymodels.svg" alt="The tidymodels hex logo" height="450"></img></div>
 
 ---
