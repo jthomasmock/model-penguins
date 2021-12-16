@@ -1,0 +1,1293 @@
+---
+title: "Intro to `tidymodels`"
+author: "Tom Mock: [`@thomas_mock`](https://twitter.com/thomas_mock)"
+date: "`r Sys.Date()`"
+output:
+  xaringan::moon_reader:
+    self_contained: true
+    seal: false
+    nature: 
+      beforeInit: "https://platform.twitter.com/widgets.js"
+      highlightStyle: github
+      highlightLines: true
+      highlightSpans: true
+      countIncrementalSlides: false
+      ratio: '16:9'
+    css: ["css/my-theme.css", "css/my-fonts.css", "default"]
+---
+
+
+```{r setup, include = FALSE, eval = TRUE}
+library(tidyverse)
+library(palmerpenguins)
+library(tidymodels)
+library(vip)
+library(usemodels)
+library(xaringan)
+library(gt)
+
+knitr::opts_chunk$set(fig.retina = 3, warning = FALSE, message = FALSE)
+```
+
+
+layout: true
+
+---
+
+class: title-slide, left, top
+
+# <span style='color:white;'>`r rmarkdown::metadata$title`</span>
+
+## <span style='color:white;'>`r rmarkdown::metadata$author`</span>
+
+### `r Sys.Date()`
+
+<div style = "position: absolute;top: 100px;right: 50px;"><img src="https://raw.githubusercontent.com/rstudio/hex-stickers/master/SVG/tidymodels.svg" alt="The tidymodels hex logo" height="450"></img></div>
+
+---
+
+```{css, include = FALSE, eval = TRUE}
+/* Extra CSS */
+.hljs-github .hjls {
+  background: black;
+}
+.small {
+  font-size: 70%;
+}
+.small pre .remark-code {
+  font-size: 75%;
+}
+.small .remark-code {
+  font-size: 75%;
+}
+
+.tiny {
+  font-size: 60%;
+}
+.tiny pre .remark-code {
+  font-size: 60%;
+}
+.tiny .remark-code {
+  font-size: 60%;
+}
+
+.tiny .remark-code {
+  font-size: 60%;
+}
+
+.small {
+  font-size: 80%;
+}
+.small pre .remark-code {
+  font-size: 85%;
+}
+.small .remark-code {
+  font-size: 85%;
+}
+
+.remark-slide thead, .remark-slide tr:nth-child(2n) {
+  background-color: white;
+}
+
+.remark-slide thead, .remark-slide tr:nth-child(2n) {
+  background-color: white;
+}
+
+/* footer */
+
+div.my-footer {
+    background-color: #1a1917;
+    position: absolute;
+    bottom: 0px;
+    left: 0px;
+    height: 20px;
+    width: 100%;
+}
+
+div.my-footer span {
+    font-size: 10pt;
+    color: #F7F8FA;
+    position: absolute;
+    left: 15px;
+    bottom: 2px;
+}
+
+```
+
+### Focus for Today
+
+60 Minutes
+
+Binary classification:  
+- Logistic Regression  
+- Random Forest  
+
+---
+
+### Level-Setting
+
+As much as I'd love to learn and teach *all* of Machine Learning/Statistics in 60 min...  
+
+--
+
+It's just not possible!  
+
+--
+
+### Goals for today
+
+* Make you comfortable with the **syntax** and **packages** via `tidymodels` unified interface
+* So when you're learning or modeling on your own, you get to focus on the **stats** rather than re-learning different APIs over and over...
+
+--
+
+Along the way, we'll cover minimal examples and then some more quick best practices where `tidymodels` makes it easier to do more things!  
+
+---
+
+# `tidymodels`
+
+`tidymodels` is a collection of packages for modeling and machine learning using `tidyverse` principles.
+
+## Packages
+* `rsample`: efficient data splitting and resampling  
+* `parsnip`: tidy, unified interface to models  
+* `recipes`: tidy interface to data pre-processing tools for feature engineering  
+* `workflows`: bundles your pre-processing, modeling, and post-processing  
+* `tune`: helps optimize the hyperparameters and pre-processing steps  
+* `yardstick`: measures the performance metrics  
+* `dials`: creates and manages tuning parameters/grids  
+* `broom`: converts common R statistical objects into predictable formats  
+  * [`broom` available methods](https://broom.tidymodels.org/articles/available-methods.html) 
+
+---
+class:inverse, center, middle
+
+# Tidy Machine Learning w/ `tidymodels`
+```{r, echo = FALSE, out.width="25%"}
+knitr::include_graphics("https://raw.githubusercontent.com/rstudio/hex-stickers/master/SVG/tidymodels.svg")
+```
+
+
+---
+
+### Core ideas for Today
+
+A workflow for `tidy` machine learning  
+
+* Split the data  
+* Pre-Process and Choose a Model  
+* Combine into a Workflow  
+* Generate Predictions and Assess Model Metrics  
+
+---
+
+### Classification
+
+Showing two examples today, comparing their outcomes, and then giving you the chance to explore on your own! 
+
+---
+
+### The Dataset
+
+Palmer penguins dataset - a modern replacement for R's iris dataset
+--
+
+#### The goal: Binary classification of sex for the various penguin species
+
+--
+
+```{r cache = TRUE, echo = TRUE}
+glimpse(palmerpenguins::penguins)
+```
+
+---
+
+### Penguins
+
+```{r, fig.dim=c(8,4), fig.retina=2}
+penguins %>%
+  filter(!is.na(sex)) %>%
+  ggplot(aes(flipper_length_mm, bill_length_mm, color = sex, size = body_mass_g)) +
+  geom_point(alpha = 0.5) + facet_wrap(~species) +
+  scale_color_manual(values = c("purple","cyan4")) + theme_minimal()
+```
+
+
+---
+
+### Core ideas for Today
+
+A workflow for `tidy` machine learning  
+
+* Split the data  
+* Pre-Process and Choose a Model  
+* Combine into a Workflow  
+* Generate Predictions and Assess Model Metrics  
+
+---
+
+
+### Split
+
+```{r, eval = FALSE}
+split_data <- initial_split(data, 0.75)
+
+train_data <- training(split_data)
+test_data <- testing(split_data)
+```
+
+---
+
+### Pre-Process & choose a model
+
+```{r, eval = FALSE}
+model_recipe <- recipe(pred ~ predictors, data = train_data) 
+```
+
+```{r, eval = FALSE}
+# Choose a model and an engine
+lr_mod <- logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+```
+
+---
+
+### Combine into a workflow
+
+```{r, eval = FALSE}
+# Combine the model and recipe to the workflow
+lr_wflow <- workflow() %>% 
+  add_recipe(model_recipe) %>% 
+  add_model(lr_mod)
+           
+# Fit/train the model
+model_fit <- lr_wflow %>% 
+  fit(data = train_data)
+```
+
+---
+
+### Predict and get metrics
+
+
+```{r, eval = FALSE}
+# Get predictions
+pred_lr <- predict(penguin_fit_lr, test_data)
+
+# Check metrics
+pred_lr %>% 
+  metrics(truth = pred, .pred_class) %>% 
+  bind_cols(select(test_data, pred)) %>% 
+  bind_cols(predict(fit_lr, test_data, type = "prob"))
+```
+
+
+---
+
+.small[
+  
+#### **Split**
+```{r, eval = FALSE}
+# Split
+penguin_split <- initial_split(penguins_df, strata = sex)
+
+# Split into test/train
+penguin_train <- training(penguin_split)
+penguin_test <- testing(penguin_split)
+```
+#### **Pre-Process & Choose a model**
+```{r, eval =FALSE}
+penguin_rec <- recipe(sex ~ ., data = penguins_df)
+
+# Choose a model and an engine
+lr_mod <- logistic_reg(mode = "classification") %>% 
+  set_engine("glm")
+```
+#### **Combine into a workflow**
+  
+```{r, eval = FALSE}
+# Combine the model and recipe to the workflow
+penguin_wf <- workflow() %>%
+  add_recipe(penguin_rec)
+
+# Fit/train the model
+penguin_fit_lr <- penguin_wf %>% 
+  add_model(glm_spec) %>% 
+  fit(data = penguin_train)
+```
+#### **Predict and get metrics**
+```{r, eval = FALSE}
+# Get predictions
+penguin_pred_lr <- predict(penguin_fit_lr, penguin_test) %>% 
+  # Add back a "truth" column for what the actual play_type was
+  bind_cols(penguin_test %>% select(sex)) %>% 
+  # Get probabilities for the class for each observation
+  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob"))
+
+# Check metrics
+penguin_pred_lr %>%
+  # get Area under Curve
+  roc_auc(truth = sex, .pred_female)
+```
+
+]
+
+---
+class: inverse, center, middle
+
+# `rsample`
+![](https://raw.githubusercontent.com/tidymodels/rsample/master/man/figures/logo.png)
+
+---
+
+### `rsample`
+
+Now that we've shown the overview, we'll start with `tidymodels` proper.
+
+`rsample` at a mininum does your train/test split, but also takes care of things like boostrapping, stratification, v-fold cross validation, validation splits, rolling origin, etc.
+
+---
+
+## Data cleaning
+
+```{r}
+penguins_df <- penguins %>%
+  filter(!is.na(sex)) %>%
+  select(-year, -island)
+
+glimpse(penguins_df)
+```
+
+
+---
+
+## Data Splitting w/ `rsample`
+
+Do the initial split and stratify by sex to make sure there are equal ratios of male vs female in `test` and `train`  
+
+```{r}
+set.seed(123)
+penguin_split <- initial_split(penguins_df, strata = sex)
+
+penguin_split
+
+# separate the training data
+penguin_train <- training(penguin_split)
+
+# separate the testing data
+penguin_test <- testing(penguin_split)
+```
+
+
+---
+
+### Test vs Train
+
+Split into `train_data` and `test_data` and then confirm the ratios.
+
+```{r split and train ratio}
+penguin_train %>% 
+  count(sex) %>% 
+  mutate(ratio = n/sum(n))
+```
+
+
+```{r print test ratio}
+penguin_test %>% 
+  count(sex) %>% 
+  mutate(ratio = n/sum(n))
+```
+
+---
+
+## Bootstraps
+
+We can also do our bootstraps very quickly!
+
+> A bootstrap sample of the training set is a sample that is the same size as the training set but is drawn with replacement
+
+```{r}
+set.seed(123)
+penguin_boot <- bootstraps(penguin_train)
+penguin_boot
+```
+
+---
+
+class: inverse, center, middle
+
+# Model `recipes`
+![](https://raw.githubusercontent.com/tidymodels/recipes/master/man/figures/logo.png)
+
+---
+
+## Add recipe steps with `recipes`
+
+`recipe` steps are changes we make to the dataset, including things like centering, dummy encoding, update columns as ID only, or even custom feature engineering. 
+
+
+---
+
+### In `recipes` vs `dplyr`/`tidyr`
+
+* In `tidyverse`, you can do reshaping or basic cleaning   
+* In `recipes` it's best to do statistical transformations or other steps intended for modeling  
+  
+--
+
+Recommended preprocessing per model being fit in ["Tidy Modeling with R" appendix](https://www.tmwr.org/pre-proc-table.html)
+
+- **dummy**: Do qualitative predictors require a numeric encoding (e.g. via dummy variables or other methods).
+
+- **zv**: Should columns with a single unique value be removed?
+
+- **impute**: If some predictors are missing, should they be estimated via imputation?
+
+- **decorrelate**: If there are correlated predictors, should this correlation be mitigated? This might mean filtering out predictors, using principal component analysis, or a model-based technique.
+
+- **normalize**: Should predictors be centered and scaled?
+
+- **transform**: Is it helpful to transform predictors to be more symmetric?
+
+---
+
+### `usemodels`
+
+Relatively early in package life cycle, but helps with boilerplate
+
+```{r}
+# can use your real data to create the repeated portions
+usemodels::use_ranger(sex ~ ., penguin_train)
+```
+
+---
+class:inverse, center, middle
+
+# `parsnip`  
+
+```{r, echo=FALSE, out.width= "25%"}
+
+knitr::include_graphics("https://raw.githubusercontent.com/tidymodels/parsnip/master/man/figures/logo.png")
+```
+
+
+---
+
+## Choose a model and start your engines!
+
+`parsnip` supplies a general modeling interface to the wide world of R models!
+
+
+```{r}
+# Note that mode = "classification" is the default here anyway!
+glm_spec <- logistic_reg() %>%
+  set_engine("glm") # different implementations of same "type" of algorithim
+```
+
+---
+
+## Recipes
+
+Again, `recipes` are used for pre-processing and feature engineering but at a minimum also defeine the model formula for predictors and prediction (ie `sex ~ species + bill_length_mm`)
+
+```{r}
+penguin_rec <- recipe(sex ~ ., data = penguins_df)
+```
+
+
+---
+class:inverse, center, middle
+
+# `workflows`  
+
+```{r,echo=FALSE, out.width = "25%"}
+knitr::include_graphics("https://raw.githubusercontent.com/tidymodels/workflows/master/man/figures/logo.png")
+```
+
+
+---
+
+### Combine into a `workflow`
+
+We can now combine the model and recipe into a `workflow` - this allows us to define exactly what model and data are going into our `fit`/train call.
+
+```{r}
+penguin_wf <- workflow() %>%
+  add_recipe(penguin_rec)
+```
+
+### What is a `workflow`?
+
+A workflow is an object that can bundle together your pre-processing, modeling, and post-processing requests. For example, if you have a `recipe` and `parsnip` model, these can be combined into a workflow. The advantages are:
+
+* You don’t have to keep track of separate objects in your workspace.
+
+* The recipe prepping and model fitting can be executed using a single call to `fit()`.
+
+* If you have custom tuning parameter settings, these can be defined using a simpler interface when combined with `tune`.
+
+---
+
+### Steps so far
+
+- Build a recipe for any pre-processing  
+- Choose and build a model  
+- Combine them into a `workflow`
+
+---
+
+## Fit/train the model with `parsnip`
+
+Now we can move forward with fitting/training the model - this is really a one-liner.
+
+```{r}
+penguin_fit_lr <- penguin_wf %>% 
+  add_model(glm_spec) %>% 
+  fit(data = penguin_train) # fit the model against the training data
+```
+
+
+---
+
+## Predict outcomes with `parsnip`
+
+After the model has been trained we can compare the training data against the holdout testing data.
+
+```{r, warning=FALSE}
+penguin_pred_lr <- predict(penguin_fit_lr, penguin_test) %>% 
+  # Add back a "truth" column for what the actual play_type was
+  bind_cols(penguin_test %>% select(sex)) %>% 
+  # Get probabilities for the class for each observation
+  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob"))
+```
+
+```{r, echo = FALSE, warning = FALSE}
+penguin_pred_lr
+```
+
+
+
+---
+
+## Predict outcomes with `parsnip`
+
+Previous code of `predict() %>% bind_cols() %>% bind_cols()` is equivalent to the below:  
+
+```{r}
+penguin_pred_lr_last <- last_fit(
+  glm_spec, 
+  recipe(sex ~ ., data = penguins_df), 
+  split = penguin_split)
+
+penguin_pred_lr_last %>% 
+  pluck(".predictions", 1)
+```
+
+---
+class: inverse, middle, center
+
+# Assessing Accuracy with `yardstick`
+![](https://raw.githubusercontent.com/tidymodels/yardstick/master/man/figures/logo.png)
+
+---
+
+### Check outcomes with `yardstick`
+
+For confirming how well the model predicts, we can use `yardstick` to plot ROC curves, get AUC and collect general metrics.  
+
+.small[
+
+.pull-left[
+```{r}
+penguin_pred_lr %>%
+  # get Area under Curve
+  roc_auc(truth = sex,
+          .pred_female)
+
+penguin_pred_lr %>% 
+  # collect and report metrics
+  metrics(truth = sex, 
+          .pred_class)
+```
+
+]
+
+
+]
+
+--
+
+
+.pull-right[  
+.small[
+```{r, fig.dim = c(5,5)}
+penguin_pred_lr %>% 
+  # calculate ROC curve
+  roc_curve(truth = sex, .pred_female) %>% 
+  autoplot()
+```
+
+]
+
+]
+
+---
+
+### Note on Checking Outcomes
+
+You *could* use `last_fit()`:  
+> This functions is intended to be used after fitting a variety of models and the final tuning parameters (if any) have been finalized. The next step would be to fit using the entire training set and verify performance using the test data.
+
+```{r}
+lr_last_fit <- last_fit(glm_spec, recipe(sex ~ ., data = penguins_df), split = penguin_split)
+
+collect_metrics(lr_last_fit)
+```
+
+
+---
+
+.small[
+  
+#### **Split**
+```{r, eval = FALSE}
+# Split
+penguin_split <- initial_split(penguins_df, strata = sex)
+
+# Split into test/train
+penguin_train <- training(penguin_split)
+penguin_test <- testing(penguin_split)
+```
+#### **Pre-Process & Choose a model**
+```{r, eval =FALSE}
+penguin_rec <- recipe(sex ~ ., data = penguins_df)
+
+# Choose a model and an engine
+lr_mod <- logistic_reg(mode = "classification") %>%
+  set_engine("glm")
+```
+#### **Combine into a workflow**
+    
+```{r, eval = FALSE}
+# Combine the model and recipe to the workflow
+penguin_wf <- workflow() %>%
+  add_recipe(penguin_rec)
+
+# Fit/train the model
+penguin_fit_lr <- penguin_wf %>%
+  add_model(glm_spec) %>%
+  fit(data = penguin_train)
+```
+#### **Predict and get metrics**
+```{r, eval = FALSE}
+# Get predictions
+penguin_pred_lr <- predict(penguin_fit_lr, penguin_test) %>%
+  # Add back a "truth" column for what the actual play_type was
+  bind_cols(penguin_test %>% select(sex)) %>%
+  # Get probabilities for the class for each observation
+  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob"))
+
+# Check metrics
+penguin_pred_lr %>%
+  # get Area under Curve
+  roc_auc(
+    truth = sex,
+    .pred_female
+  )
+```
+  
+]
+
+---
+
+## Change the model
+
+How about a Random Forest model? Just change the model and re-run!
+
+```{r}
+rf_mod <- rand_forest(trees = 100) %>% 
+  set_engine("ranger", 
+             importance = "impurity", # variable importance
+             num.threads = 4) %>%     # Parallelize
+  set_mode("classification")
+
+rf_wflow <- workflow() %>% 
+  add_recipe(penguin_rec) %>% # Same recipe
+  add_model(rf_mod)           # New model #<<
+  
+
+penguin_fit_rf <- rf_wflow %>% # New workflow #<<
+  fit(data = penguin_train)   # Fit the Random Forest
+
+# Get predictions and check metrics
+penguin_pred_rf <- predict(penguin_fit_rf, penguin_test) %>% 
+  bind_cols(penguin_test %>% select(sex)) %>% 
+  bind_cols(predict(penguin_fit_rf, penguin_test, type = "prob"))
+```
+
+---
+
+### Feature Importance
+
+.small[
+```{r, fig.dim=c(10,6)}
+penguin_fit_rf %>%   
+  pull_workflow_fit() %>% 
+  vip()
+```
+
+]
+
+---
+
+### Quick Model Comparison
+
+The random forest model is basically comparable to a logistic regression for this toy example
+
+```{r compare_metrics call}
+penguin_pred_lr %>% # Logistic Regression predictions
+  metrics(truth = sex, .pred_class)
+
+penguin_pred_rf %>% # Random Forest predictions
+  metrics(truth = sex, .pred_class)
+```
+
+---
+
+### Quick Model Comparison
+
+```{r}
+penguin_pred_lr %>% # Logistic Regression predictions
+  conf_mat(truth = sex, .pred_class)
+
+penguin_pred_rf %>% # Random Forest predictions
+  conf_mat(truth = sex, .pred_class)
+```
+
+
+
+---
+
+### Comparing Models Together
+
+.pull-left[
+```{r}
+roc_rf <- penguin_pred_rf %>% 
+  roc_curve(truth = sex, .pred_female) %>% 
+  mutate(model = "Random Forest")
+
+roc_lr <- penguin_pred_lr %>% 
+  roc_curve(truth = sex, .pred_female) %>% 
+  mutate(model = "Logistic Regression")
+
+full_plot <- bind_rows(roc_rf, roc_lr) %>% 
+  # Note that autoplot() works here!
+  ggplot(aes(x = 1 - specificity, 
+             y = sensitivity, 
+             color = model)) + 
+  geom_path(lwd = 1, alpha = 0.5) +
+  geom_abline(lty = 3) + 
+  scale_color_manual(
+    values = c("#374785", "#E98074")
+    ) +
+  theme_minimal() +
+  theme(legend.position = "top",
+        legend.title = element_blank())
+  
+
+```
+
+]
+
+.pull-right[
+
+```{r, fig.dim=c(6,6)}
+full_plot
+```
+
+]
+
+---
+
+### Quick Re-Cap
+
+A workflow for `tidy` modeling
+
+* Split the data  
+* Pre-Process and Choose a Model  
+* Combine into a Workflow  
+* Generate Predictions and Assess Model Metrics  
+
+So the unified interface hopefully makes the idea of learning and applying many algorithms easier.
+
+--
+
+`tidymodels` *really* shines when you start to go further or apply best practices like:  
+* Resampling, Cross Validation, Bootstrapping  
+* Model Tuning and Model Optimization  
+* Grid Search, Iterative Search  
+
+---
+class: inverse, middle, center
+
+## A Deeper Dive on Best Practices
+
+---
+
+### Comparing Models
+
+Previously we've just compared two models by seeing how accurate they were on our `testing` data, but.... 
+
+> The test set as the data that *should* be used to conduct a proper evaluation of model performance on the **final model(s)**. This begs the question of, “How can we tell what is best if we don’t measure performance until the test set?”  
+
+--
+
+> However, we usually need to understand the effectiveness of the model *before using the test set*.  
+
+- [*Tidy Modeling with R*](https://www.tmwr.org/resampling.html#resampling)
+
+---
+
+### Bootstrap Resampling
+
+> Resampling methods are empirical simulation systems that emulate the process of using some data for modeling and different data for evaluation. Most resampling methods are iterative, meaning that this process is repeated multiple times. 
+
+> A bootstrap sample of the training set is a sample that is the same size as the training set but is drawn with replacement
+
+--
+
+[Get Started w/ Resampling](https://www.tidymodels.org/start/resampling/) and test drive on [RStudio Cloud](https://rstudio.cloud/project/1479888).
+[*Tidy Modeling with R*](https://www.tmwr.org/resampling.html#resampling-methods)  
+
+
+---
+
+### Bootstrap resampling
+
+```{r}
+set.seed(123)
+penguin_boot <- bootstraps(penguin_train)
+penguin_boot
+
+```
+
+---
+
+### Recipes
+
+```{r}
+glm_spec <- logistic_reg() %>%
+  set_engine("glm")
+```
+
+
+```{r}
+rf_spec <- rand_forest() %>%
+  set_mode("classification") %>%
+  set_engine("ranger")
+```
+
+
+---
+
+### Estimate Performance w/ Resampling
+
+NOTE: Fitting the model multiple times can take a while with larger models or more folds/repeats! I recommend running this as a background job in RStudio, so you don't lock up your session for the duration.  
+
+```{r, eval = TRUE, cache = TRUE, message=FALSE}
+glm_rs <- penguin_wf %>%
+  add_model(glm_spec) %>%
+  fit_resamples(resamples = penguin_boot,
+    control = control_resamples(save_pred = TRUE))
+
+glm_rs
+```
+
+
+---
+
+### Estimate Performance
+
+Random Forest as well!
+
+```{r, eval = TRUE, message=FALSE}
+rf_rs <- penguin_wf %>%
+  add_model(rf_spec) %>%
+  fit_resamples(resamples = penguin_boot,
+    control = control_resamples(save_pred = TRUE))
+
+rf_rs
+```
+
+
+---
+
+### What just happened???
+
+We just fit a model for each resample, evaluated it against a within resample assessment set, and stored it into a single `tibble`!
+
+.small[
+.pull-left[
+```{r}
+rf_rs %>% 
+  # grab specific columns and resamples
+  pluck(".metrics", 1) 
+```
+
+]
+
+]
+
+.small[
+
+.pull-right[
+```{r}
+rf_rs %>% 
+  # grab specific columns and resamples
+  pluck(".predictions", 10)
+```
+
+]
+
+
+]
+---
+
+### What else can you do?
+
+.small[
+
+.pull-left[
+```{r}
+# Summarize all metrics
+rf_rs %>% 
+  collect_metrics(summarize = TRUE)
+```
+
+]
+
+
+]
+
+.pull-right[
+```{r, eval = FALSE}
+rf_rs %>% 
+  # combine ALL predictions
+  collect_predictions()
+```
+
+.small[
+```{r, echo = FALSE}
+rf_rs %>% 
+  collect_predictions()
+```
+
+]
+
+]
+
+---
+
+### Collect metrics
+
+First show our predicted model with compared against our test data.
+
+--
+
+.small[
+.pull-left[
+```{r, echo = TRUE}
+set.seed(20201024)
+```
+
+```{r}
+# Naive Model on Testing Data
+rf_compare_df <- bind_rows(
+  accuracy(
+    penguin_pred_rf, 
+    truth = sex, .pred_class
+    ),
+  roc_auc(
+    penguin_pred_rf, 
+    truth = sex, .pred_female
+    )
+  )
+```
+
+And then the what our resampled data looks like, which still would leave our test data as unseen.
+
+```{r, fig.dim = c(4,4),}
+combo_plot <- rf_rs %>% 
+  collect_metrics(summarize = FALSE) %>% 
+  ggplot(aes(x = .metric, y = .estimate)) +
+  geom_jitter(width = 0.2) +
+  geom_boxplot(width = 0.3, alpha = 0.5) +
+  geom_point(
+    data = rf_compare_df,
+    color = "red", size = 5
+    )
+```
+]
+
+]
+
+--
+
+.tiny[
+.pull-right[
+```{r, fig.dim=c(6,6), echo = FALSE}
+combo_plot
+```
+
+]
+
+]
+
+---
+
+### Estimate Performance w/ Bootstrap resamples
+
+```{r}
+assess_res <- collect_predictions(rf_rs)
+
+assess_res
+```
+
+
+---
+class: inverse, middle, center
+
+## Model Tuning with `tune`
+```{r, echo = FALSE, out.width="25%"}
+knitr::include_graphics("https://raw.githubusercontent.com/rstudio/hex-stickers/master/SVG/tune.svg")
+```
+
+
+---
+
+### `tune`
+
+We never adjusted our model! We just used naive models and evaluated their performance. 
+
+Now, their performance was pretty decent (~90% accuracy), but could we get better?
+
+--
+
+[Get Started with Tuning](https://www.tidymodels.org/start/tuning/) and test drive on [RStudio Cloud](https://rstudio.cloud/project/1479888)
+
+---
+
+### Resample + Tune
+
+We're going to use grid-search for our tuning process, and we also need to specify which hyperparameters of our random forest we want to tune. 
+
+
+>Note: A hyperparameter is a parameter who value is used to control the learning process - [Wikipedia](https://en.wikipedia.org/wiki/Hyperparameter_(machine_learning))
+
+.pull-left[
+```{r}
+tune_penguin_rf <- rand_forest(
+  mtry = tune(), # add placeholder for tune
+  trees = 100,
+  min_n = tune() # add placeholder for tune
+) %>% 
+  set_mode("classification") %>% 
+  set_engine("ranger")
+
+tune_rf_wf <- workflow() %>% 
+  add_recipe(penguin_rec) %>% 
+  add_model(tune_penguin_rf)
+```
+]
+
+
+.small[
+.pull-right[
+```{r}
+tune_rf_wf
+```
+
+]
+
+]
+
+---
+
+### Grid Search
+
+We'll create a grid of possible hyperparameters and then estimate how well they fit with our resamples.
+
+Note that this took about 20 min to run!
+
+I'm doing 15x models by 5x folds, where we train a model and predict outcomes each time! The beauty here is that you could run this as a background job.
+
+```{r, cache = TRUE}
+set.seed(20210430)
+
+penguin_folds <- vfold_cv(penguin_train, v = 5)
+
+tune_res <- tune_grid(
+  tune_rf_wf,
+  resamples = penguin_folds,
+  grid = 15, # 15 combos of model parameters
+  control = control_grid(verbose = TRUE)
+)
+```
+
+---
+
+### Grid Search
+
+Here are the results!
+
+```{r}
+tune_res
+```
+
+---
+
+### Check it out
+
+It's nested tibbles for the split data, the fold id, metrics, and any notes.
+
+```{r}
+# Essentially the same as tune_res[[".metrics"]][[1]]
+tune_res %>% 
+  pluck(".metrics", 3)
+
+
+```
+
+
+---
+
+### Check it out
+
+.small[
+.pull-left[
+```{r, fig.dim = c(8,10)}
+plot_tuned <- tune_res %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>%
+  dplyr::select(mean, mtry:min_n) %>%
+  pivot_longer(mtry:min_n,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", ncol = 1) +
+  labs(x = NULL, y = "AUC")
+```
+]
+
+]
+
+.tiny[
+.pull-right[
+```{r, fig.dim=c(4,6), echo = FALSE}
+plot_tuned
+```
+
+]
+
+]
+
+---
+
+### Check it out (scaling matters!)
+
+.small[
+.pull-left[
+```{r, fig.dim = c(4,4)}
+plot_tuned <- tune_res %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>%
+  dplyr::select(mean, mtry:min_n) %>%
+  pivot_longer(mtry:min_n,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", ncol = 1) +
+  labs(x = NULL, y = "AUC")
+```
+]
+
+]
+
+.pull-right[
+```{r, fig.dim=c(4,6)}
+plot_tuned +
+  scale_y_continuous(limits = c(0.75, 0.98))
+```
+
+]
+
+
+---
+
+### Finalize
+
+Here we are investigating which hyperparameters maximized ROC Area Under the Curve.
+
+```{r}
+# Which 5x were best?
+show_best(tune_res, "roc_auc", n = 5)
+
+# Select the best
+best_fit_auc <- select_best(tune_res, "roc_auc")
+
+# Select wflow for the model with best hyperparams
+rf_tuned <- finalize_workflow(
+  rf_wflow,
+  parameters = best_fit_auc
+)
+```
+
+---
+
+### Finalize 
+
+Show the outcomes!
+
+```{r}
+set.seed(20201024)
+rf_tuned_fit <- last_fit(rf_tuned, penguin_split)
+
+rf_tuned_fit %>%  # tuned model metrics
+  collect_metrics()
+```
+
+```{r}
+rf_compare_df # naive model metrics
+```
+
+---
+
+### Addendums
+
+- Model training/fitting (or simulation) is likely to be the most time-intensive computation you do - as such, it's a good idea to run them as [**background jobs** in RStudio](https://blog.rstudio.com/2019/03/14/rstudio-1-2-jobs/)  
+
+- Also can turn on verbose reporting so you know where you're at in the Cross-validation or tuning steps  
+  - `control_grid(verbose = TRUE)`
+
+---
+
+### Thank you
+
+* All y'all for listening in `r emo::ji("cowboy")`
+
+### Learn more
+
+* [`tidymodels`.org](https://www.tidymodels.org/learn/) has step by step guides of various complexities
+
+* Julia Silge's (a `tidymodels` maintainer) [blog](https://juliasilge.com/), [video series](https://www.youtube.com/channel/UCTTBgWyJl2HrrhQOOc710kA), or [free interactive course](https://supervised-ml-course.netlify.app/)  
+
+* [Tidy Modeling with R](https://www.tmwr.org/) - get started quickly with `tidymodels`  
+
+- [Introduction to Statistical Learning](https://www.statlearning.com/) - understand the math (new edition just came out!)  
+
+- [Hands on Machine Learning with R](https://bradleyboehmke.github.io/HOML/) - get started quickly with modeling in R (mix of base R, `caret`, and `tidymodels`)  
