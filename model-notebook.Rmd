@@ -1,0 +1,392 @@
+---
+title: "R Notebook"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+# remotes::install_github("allisonhorst/palmerpenguins")
+# install.packages("usemodels")
+# install.packages("vip")
+# install.packages("tidyverse")
+# install.packages("tidymodels")
+library(vip)
+library(tidyverse)
+library(usemodels)
+library(palmerpenguins)
+library(tidymodels)
+glimpse(palmerpenguins::penguins)
+```
+
+
+
+
+```{r}
+penguins %>%
+  filter(!is.na(sex)) %>%
+  ggplot(aes(flipper_length_mm, bill_length_mm, color = sex, size = body_mass_g)) +
+  geom_point(alpha = 0.5) + facet_wrap(~species) +
+  scale_color_manual(values = c("purple","cyan4")) + theme_minimal()
+```
+Split
+
+```{r}
+penguins_df <- penguins %>%
+  filter(!is.na(sex)) %>%
+  select(-year, -island)
+glimpse(penguins_df)
+```
+```{r}
+set.seed(123)
+penguin_split <- initial_split(penguins_df, strata = sex)
+penguin_split
+```
+
+
+
+```{r}
+# separate the training data
+penguin_train <- training(penguin_split)
+# separate the testing data
+penguin_test <- testing(penguin_split)
+```
+
+```{r}
+penguin_train %>% 
+  count(sex) %>% 
+  mutate(ratio = n/sum(n))
+
+penguin_test %>% 
+  count(sex) %>% 
+  mutate(ratio = n/sum(n))
+```
+
+```{r}
+set.seed(123)
+penguin_boot <- bootstraps(penguin_train)
+penguin_boot
+```
+
+```{r}
+usemodels::use_ranger(sex ~ ., penguin_train)
+```
+```{r}
+# Note that mode = "classification" is the default here anyway!
+glm_spec <- logistic_reg() %>%
+  set_engine("glm") # different implementations of same "type" of algorithim
+
+penguin_rec <- recipe(sex ~ ., data = penguins_df)
+```
+
+```{r}
+penguin_wf <- workflow() %>%
+  add_recipe(penguin_rec)
+```
+
+```{r}
+penguin_fit_lr <- penguin_wf %>% 
+  add_model(glm_spec) %>% 
+  fit(data = penguin_train) # fit the model against the training data
+```
+
+```{r}
+penguin_pred_lr <- predict(penguin_fit_lr, penguin_test) %>% 
+  # Add back a "truth" column for what the actual play_type was
+  bind_cols(penguin_test %>% select(sex)) %>% 
+  # Get probabilities for the class for each observation
+  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob"))
+```
+
+```{r}
+penguin_pred_lr_last <- last_fit(
+  glm_spec, 
+  recipe(sex ~ ., data = penguins_df), 
+  split = penguin_split)
+penguin_pred_lr_last %>% 
+  pluck(".predictions", 1)
+```
+
+```{r}
+penguin_pred_lr %>%
+  # get Area under Curve
+  roc_auc(truth = sex,
+          .pred_female)
+
+penguin_pred_lr %>% 
+  # collect and report metrics
+  metrics(truth = sex, 
+          .pred_class)
+
+penguin_pred_lr %>% 
+  # calculate ROC curve
+  roc_curve(truth = sex, .pred_female) %>% 
+  autoplot()
+```
+```{r}
+lr_last_fit <- last_fit(glm_spec, recipe(sex ~ ., data = penguins_df), split = penguin_split)
+collect_metrics(lr_last_fit)
+```
+
+```{r}
+
+# Split
+penguin_split <- initial_split(penguins_df, strata = sex)
+
+# Split into test/train
+penguin_train <- training(penguin_split)
+penguin_test <- testing(penguin_split)
+
+penguin_rec <- recipe(sex ~ ., data = penguins_df)
+
+# Choose a model and an engine
+lr_mod <- logistic_reg(mode = "classification") %>%
+  set_engine("glm")
+
+# Combine the model and recipe to the workflow
+penguin_wf <- workflow() %>%
+  add_recipe(penguin_rec)
+# Fit/train the model
+penguin_fit_lr <- penguin_wf %>%
+  add_model(glm_spec) %>%
+  fit(data = penguin_train)
+
+# Get predictions
+penguin_pred_lr <- predict(penguin_fit_lr, penguin_test) %>%
+  bind_cols(penguin_test %>% select(sex)) %>% # Add back a "truth" column for what the actual sex was
+  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob")) # Get probabilities for the class for each observation
+# Check metrics
+penguin_pred_lr %>%
+  # get Area under Curve
+  roc_auc(
+    truth = sex,
+    .pred_female
+  )
+```
+```{r}
+rf_mod <- rand_forest(trees = 100) %>% 
+  set_engine("ranger", 
+             importance = "impurity", # variable importance
+             num.threads = 4) %>%     # Parallelize
+  set_mode("classification")
+rf_wflow <- workflow() %>% 
+  add_recipe(penguin_rec) %>% # Same recipe
+  add_model(rf_mod)           # New model
+penguin_fit_rf <- rf_wflow %>% # New workflow
+  fit(data = penguin_train)   # Fit the Random Forest
+# Get predictions and check metrics
+penguin_pred_rf <- predict(penguin_fit_rf, penguin_test) %>% 
+  bind_cols(penguin_test %>% select(sex)) %>% 
+  bind_cols(predict(penguin_fit_rf, penguin_test, type = "prob"))
+
+penguin_fit_rf %>%   
+  pull_workflow_fit() %>% 
+  vip()
+```
+
+```{r}
+penguin_pred_lr %>% # Logistic Regression predictions
+  metrics(truth = sex, .pred_class)
+
+penguin_pred_rf %>% # Random Forest predictions
+  metrics(truth = sex, .pred_class)
+
+penguin_pred_lr %>% # Logistic Regression predictions
+  conf_mat(truth = sex, .pred_class)
+
+penguin_pred_rf %>% # Random Forest predictions
+  conf_mat(truth = sex, .pred_class)
+```
+```{r}
+roc_rf <- penguin_pred_rf %>% 
+  roc_curve(truth = sex, .pred_female) %>% 
+  mutate(model = "Random Forest")
+roc_lr <- penguin_pred_lr %>% 
+  roc_curve(truth = sex, .pred_female) %>% 
+  mutate(model = "Logistic Regression")
+full_plot <- bind_rows(roc_rf, roc_lr) %>% 
+  # Note that autoplot() works here!
+  ggplot(aes(x = 1 - specificity, 
+             y = sensitivity, 
+             color = model)) + 
+  geom_path(lwd = 1, alpha = 0.5) +
+  geom_abline(lty = 3) + 
+  scale_color_manual(
+    values = c("#374785", "#E98074")
+    ) +
+  theme_minimal() +
+  theme(legend.position = "top",
+        legend.title = element_blank())
+full_plot
+```
+```{r}
+set.seed(123)
+penguin_boot <- bootstraps(penguin_train)
+penguin_boot
+```
+```{r}
+glm_spec <- logistic_reg() %>%
+  set_engine("glm")
+rf_spec <- rand_forest() %>%
+  set_mode("classification") %>%
+  set_engine("ranger")
+```
+
+```{r}
+glm_rs <- penguin_wf %>%
+  add_model(glm_spec) %>%
+  fit_resamples(resamples = penguin_boot,
+    control = control_resamples(save_pred = TRUE))
+glm_rs
+```
+
+```{r}
+rf_rs <- penguin_wf %>%
+  add_model(rf_spec) %>%
+  fit_resamples(resamples = penguin_boot,
+    control = control_resamples(save_pred = TRUE))
+rf_rs
+```
+```{r}
+rf_rs %>% 
+  # grab specific columns and resamples
+  pluck(".metrics", 1)
+
+rf_rs %>% 
+  # grab specific columns and resamples
+  pluck(".predictions", 10)
+```
+
+```{r}
+# Summarize all metrics
+rf_rs %>% 
+  collect_metrics(summarize = TRUE)
+
+rf_rs %>% 
+  # combine ALL predictions
+  collect_predictions()
+```
+
+```{r}
+set.seed(20201024)
+
+# Naive Model on Testing Data
+rf_compare_df <- bind_rows(
+  accuracy(
+    penguin_pred_rf, 
+    truth = sex, .pred_class
+    ),
+  roc_auc(
+    penguin_pred_rf, 
+    truth = sex, .pred_female
+    )
+  )
+
+
+```
+
+```{r}
+combo_plot <- rf_rs %>% 
+  collect_metrics(summarize = FALSE) %>% 
+  ggplot(aes(x = .metric, y = .estimate)) +
+  geom_jitter(width = 0.2) +
+  geom_boxplot(width = 0.3, alpha = 0.5) +
+  geom_point(
+    data = rf_compare_df,
+    color = "red", size = 5)
+```
+
+```{r}
+assess_res <- collect_predictions(rf_rs)
+assess_res
+```
+
+```{r}
+tune_penguin_rf <- rand_forest(
+  mtry = tune(), # add placeholder for tune
+  trees = 100,
+  min_n = tune() # add placeholder for tune
+) %>% 
+  set_mode("classification") %>% 
+  set_engine("ranger")
+tune_rf_wf <- workflow() %>% 
+  add_recipe(penguin_rec) %>% 
+  add_model(tune_penguin_rf)
+```
+
+```{r}
+set.seed(20210430)
+penguin_folds <- vfold_cv(penguin_train, v = 5)
+tune_res <- tune_grid(
+  tune_rf_wf,
+  resamples = penguin_folds,
+  grid = 15, # 15 combos of model parameters
+  control = control_grid(verbose = TRUE)
+)
+```
+
+```{r}
+tune_res
+```
+
+```{r}
+tune_res %>% 
+  pluck(".metrics", 3)
+```
+
+```{r}
+plot_tuned <- tune_res %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>%
+  dplyr::select(mean, mtry:min_n) %>%
+  pivot_longer(mtry:min_n,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", ncol = 1) +
+  labs(x = NULL, y = "AUC")
+```
+
+```{r}
+plot_tuned <- tune_res %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>%
+  dplyr::select(mean, mtry:min_n) %>%
+  pivot_longer(mtry:min_n,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x", ncol = 1) +
+  labs(x = NULL, y = "AUC")
+plot_tuned +
+  scale_y_continuous(limits = c(0.75, 0.98))
+```
+
+```{r}
+# Which 5x were best?
+show_best(tune_res, "roc_auc", n = 5)
+```
+
+```{r}
+# Select the best
+best_fit_auc <- select_best(tune_res, "roc_auc")
+# Select wflow for the model with best hyperparams
+rf_tuned <- finalize_workflow(
+  rf_wflow,
+  parameters = best_fit_auc
+)
+```
+
+```{r}
+set.seed(20201024)
+rf_tuned_fit <- last_fit(rf_tuned, penguin_split)
+rf_tuned_fit %>%  # tuned model metrics
+  collect_metrics()
+```
+```{r}
+rf_compare_df # naive model metrics
+```
