@@ -29,8 +29,10 @@ library(gt)
 knitr::opts_chunk$set(fig.retina = 3, warning = FALSE, message = FALSE)
 ```
 
-
 layout: true
+
+<div class="my-footer"><a href='https://jthomasmock.github.io/model-penguins/'>https://jthomasmock.github.io/model-penguins/</a></div>
+
 
 ---
 
@@ -320,10 +322,8 @@ penguin_fit_lr <- penguin_wf %>%
 ```{r, eval = FALSE}
 # Get predictions
 penguin_pred_lr <- predict(penguin_fit_lr, penguin_test) %>% 
-  # Add back a "truth" column for what the actual play_type was
-  bind_cols(penguin_test %>% select(sex)) %>% 
-  # Get probabilities for the class for each observation
-  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob"))
+  bind_cols(penguin_test %>% select(sex)) %>%   # Add back a "truth" column for what the actual sex was
+  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob")) # Get probabilities for the class for each observation
 
 # Check metrics
 penguin_pred_lr %>%
@@ -519,7 +519,7 @@ penguin_wf <- workflow() %>%
 
 ### What is a `workflow`?
 
-A workflow is an object that can bundle together your pre-processing, modeling, and post-processing requests. For example, if you have a `recipe` and `parsnip` model, these can be combined into a workflow. The advantages are:
+A workflow is an object that can bundle together your pre-processing, modeling, and post-processing requests. If you have a `recipe` + `parsnip` model, these can be combined into a workflow. The advantages are:
 
 * You don’t have to keep track of separate objects in your workspace.
 
@@ -683,10 +683,8 @@ penguin_fit_lr <- penguin_wf %>%
 ```{r, eval = FALSE}
 # Get predictions
 penguin_pred_lr <- predict(penguin_fit_lr, penguin_test) %>%
-  # Add back a "truth" column for what the actual play_type was
-  bind_cols(penguin_test %>% select(sex)) %>%
-  # Get probabilities for the class for each observation
-  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob"))
+  bind_cols(penguin_test %>% select(sex)) %>% # Add back a "truth" column for what the actual sex was
+  bind_cols(predict(penguin_fit_lr, penguin_test, type = "prob")) # Get probabilities for the class for each observation
 
 # Check metrics
 penguin_pred_lr %>%
@@ -1025,8 +1023,7 @@ combo_plot <- rf_rs %>%
   geom_boxplot(width = 0.3, alpha = 0.5) +
   geom_point(
     data = rf_compare_df,
-    color = "red", size = 5
-    )
+    color = "red", size = 5)
 ```
 ]
 
@@ -1058,11 +1055,10 @@ assess_res
 ---
 class: inverse, middle, center
 
-## Model Tuning with `tune`
-```{r, echo = FALSE, out.width="25%"}
+## Model Tuning with `tune`<br><img src='https://raw.githubusercontent.com/rstudio/hex-stickers/master/SVG/tune.svg' height="150"></img>
+```{r, echo = FALSE, eval = FALSE, out.width="25%"}
 knitr::include_graphics("https://raw.githubusercontent.com/rstudio/hex-stickers/master/SVG/tune.svg")
 ```
-
 
 ---
 
@@ -1218,6 +1214,8 @@ plot_tuned <- tune_res %>%
 
 ]
 
+.small[
+
 .pull-right[
 ```{r, fig.dim=c(4,6)}
 plot_tuned +
@@ -1226,6 +1224,8 @@ plot_tuned +
 
 ]
 
+
+]
 
 ---
 
